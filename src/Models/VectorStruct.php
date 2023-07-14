@@ -6,8 +6,12 @@
 
 namespace Qdrant\Models;
 
+use Qdrant\Models\Traits\ProtectedPropertyAccessor;
+
 class VectorStruct
 {
+    use ProtectedPropertyAccessor;
+
     protected array $vector;
     protected ?string $name;
 
@@ -17,9 +21,14 @@ class VectorStruct
         $this->name = $name;
     }
 
+    public function isNamed(): bool
+    {
+        return $this->name !== null;
+    }
+
     public function toSearch(): array
     {
-        if ($this->name) {
+        if ($this->isNamed()) {
             return [
                 'name' => $this->name,
                 'vector' => $this->vector,
@@ -30,7 +39,7 @@ class VectorStruct
 
     public function toArray(): array
     {
-        if ($this->name) {
+        if ($this->isNamed()) {
             return [
                 $this->name => $this->vector
             ];

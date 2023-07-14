@@ -1,39 +1,31 @@
 <?php
 /**
- * SearchParams
+ * RecommendRequest
  *
- * @since     Mar 2023
- * @author    Haydar KULEKCI <haydarkulekci@gmail.com>
+ * @since     Jun 2023
+ * @author    Greg Priday <greg@siteorigin.com>
  */
 namespace Qdrant\Models\Request;
 
 use Qdrant\Models\Filter\Filter;
 use Qdrant\Models\Traits\ProtectedPropertyAccessor;
-use Qdrant\Models\VectorStruct;
 
-class SearchRequest
+class RecommendRequest
 {
     use ProtectedPropertyAccessor;
 
     protected ?Filter $filter = null;
-
-    protected array $params = [];
-
-    protected VectorStruct $vector;
-
+    protected array $positive;
+    protected array $negative;
+    protected ?string $using = null;
     protected ?int $limit = null;
-
     protected ?int $offset = null;
-
-    protected bool|array|null $withVector = null;
-
-    protected bool|array|null $withPayload = null;
-
     protected ?float $scoreThreshold = null;
 
-    public function __construct(VectorStruct $vector)
+    public function __construct(array $positive, array $negative = [])
     {
-        $this->vector = $vector;
+        $this->positive = $positive;
+        $this->negative = $negative;
     }
 
     public function setFilter(Filter $filter): static
@@ -50,9 +42,9 @@ class SearchRequest
         return $this;
     }
 
-    public function setParams(array $params): static
+    public function setUsing(string $using): static
     {
-        $this->params = $params;
+        $this->using = $using;
 
         return $this;
     }
@@ -71,33 +63,21 @@ class SearchRequest
         return $this;
     }
 
-    public function setWithPayload($withPayload): static
-    {
-        $this->withPayload = $withPayload;
-
-        return $this;
-    }
-
-    public function setWithVector($withVector): static
-    {
-        $this->withVector = $withVector;
-
-        return $this;
-    }
-
     public function toArray(): array
     {
         $body = [
-            'vector' => $this->vector->toSearch(),
+            'positive' => $this->positive,
+            'negative' => $this->negative,
         ];
+
         if ($this->filter !== null && $this->filter->toArray()) {
             $body['filter'] = $this->filter->toArray();
         }
         if($this->scoreThreshold) {
             $body['score_threshold'] = $this->scoreThreshold;
         }
-        if ($this->params) {
-            $body['params'] = $this->params;
+        if ($this->using) {
+            $body['using'] = $this->using;
         }
         if ($this->limit) {
             $body['limit'] = $this->limit;
@@ -105,14 +85,7 @@ class SearchRequest
         if ($this->offset) {
             $body['offset'] = $this->offset;
         }
-        if ($this->withVector) {
-            $body['with_vector'] = $this->withVector;
-        }
-        if ($this->withPayload) {
-            $body['with_payload'] = $this->withPayload;
-        }
 
         return $body;
     }
-
 }

@@ -1,7 +1,7 @@
 <?php
 /**
- * @since     Mar 2023
- * @author    Haydar KULEKCI <haydarkulekci@gmail.com>
+ * @since     Jun 2023
+ * @author    Greg Priday <greg@siteorigin.com>
  */
 
 namespace Qdrant\Tests\Integration\Endpoints\Collections;
@@ -11,11 +11,11 @@ use Qdrant\Exception\InvalidArgumentException;
 use Qdrant\Models\Filter\Condition\MatchString;
 use Qdrant\Models\Filter\Filter;
 use Qdrant\Models\PointsStruct;
-use Qdrant\Models\Request\SearchRequest;
+use Qdrant\Models\Request\RecommendRequest;
 use Qdrant\Models\VectorStruct;
 use Qdrant\Tests\Integration\AbstractIntegration;
 
-class SearchTest extends AbstractIntegration
+class RecommendTest extends AbstractIntegration
 {
     /**
      * @throws InvalidArgumentException
@@ -52,86 +52,64 @@ class SearchTest extends AbstractIntegration
         ];
     }
 
-    public static function searchQueryProvider(): array
+    public static function recommendQueryProvider(): array
     {
         return [
-            [new VectorStruct([1, 2, 300], 'image')],
-            [new VectorStruct([100, 20, 300], 'image')],
+            [[1], [2]],  // Positive ids, Negative ids
+            [[1, 2], []], // Positive ids, Negative ids
         ];
     }
 
     /**
-     * @dataProvider searchQueryProvider
+     * @dataProvider recommendQueryProvider
      */
-    public function testSearchPoint(VectorStruct $vector): void
+    public function testRecommendPoint(array $positive, array $negative): void
     {
-        $searchRequest = (new SearchRequest($vector))
+        $recommendRequest = (new RecommendRequest($positive, $negative))
             ->setLimit(3)
+            ->setUsing('image')
             ->setFilter(
                 (new Filter())->addMust(
                     new MatchString('image', 'sample image')
                 )
-            )
-            ->setParams([
-                'hnsw_ef' => 128,
-                'exact' => false,
-            ]);
+            );
 
-        $response = $this->getCollections('sample-collection')->points()->search($searchRequest);
+        $response = $this->getCollections('sample-collection')->points()->recommend($recommendRequest);
 
         $this->assertEquals('ok', $response['status']);
-        $this->assertCount(1, $response['result']);
     }
 
-    /**
-     * @dataProvider searchQueryProvider
-     */
-    public function testSearchPointEmptyFilter(VectorStruct $vector): void
-    {
-        $searchRequest = (new SearchRequest($vector))
-            ->setLimit(3)
-            ->setFilter(new Filter())
-            ->setParams([
-                'hnsw_ef' => 128,
-                'exact' => false,
-            ]);
-
-        $response = $this->getCollections('sample-collection')->points()->search($searchRequest);
-
-        $this->assertEquals('ok', $response['status']);
-        $this->assertCount(2, $response['result']);
-    }
-
-    public function testSearchWithThreshold(): void
+    public function testRecommendWithThreshold(): void
     {
         // Upsert points
         $points = PointsStruct::createFromArray([
-            // This is a point that'll match the search query
-            ['id' => 2, 'vector' => new VectorStruct([0.1, 0.3, 0.2], 'image')],
-            // This will be the opposite of the search query, so should be filtered
-            ['id' => 3, 'vector' => new VectorStruct([-0.1, -0.3, -0.2], 'image')],
+            // These points should match the recommend query
+            ['id' => 4, 'vector' => new VectorStruct([0.2, 0.4, 0.5], 'image')],
+            ['id' => 5, 'vector' => new VectorStruct([0.3, 0.5, 0.6], 'image')],
+            ['id' => 6, 'vector' => new VectorStruct([0.21, 0.41, 0.51], 'image')],
         ]);
         $this->getCollections('sample-collection')->points()->upsert($points);
 
-        // Create search request without score threshold
-        $vector = new VectorStruct([0.1, 0.3, 0.2], 'image');
-        $searchRequestWithoutThreshold = (new SearchRequest($vector))
+        // Create recommend request without score threshold
+        $positiveIds = [6];
+        $recommendRequestWithoutThreshold = (new RecommendRequest($positiveIds))
             ->setLimit(3)
-            ->setParams(['hnsw_ef' => 128, 'exact' => false]);
+            ->setUsing('image')
+            ->setFilter((new Filter())->addMust(new MatchString('image', 'sample image')));
 
-        // Create search request with score threshold
-        $searchRequestWithThreshold = clone $searchRequestWithoutThreshold;
-        $searchRequestWithThreshold->setScoreThreshold(0.5);
+        // Create recommend request with score threshold
+        $recommendRequestWithThreshold = clone $recommendRequestWithoutThreshold;
+        $recommendRequestWithThreshold->setScoreThreshold(0.9);
 
-        // Perform search without score threshold
+        // Perform recommend without score threshold
         $responseWithoutThreshold = $this->getCollections('sample-collection')
             ->points()
-            ->search($searchRequestWithoutThreshold);
+            ->recommend($recommendRequestWithoutThreshold);
 
-        // Perform search with score threshold
+        // Perform recommend with score threshold
         $responseWithThreshold = $this->getCollections('sample-collection')
             ->points()
-            ->search($searchRequestWithThreshold);
+            ->recommend($recommendRequestWithThreshold);
 
         // Check that we got a response in both cases
         $this->assertEquals('ok', $responseWithoutThreshold['status']);
